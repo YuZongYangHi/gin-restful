@@ -1,4 +1,4 @@
-module awesomeProject
+module gin-restful
 
 go 1.13
 

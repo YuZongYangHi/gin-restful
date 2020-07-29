@@ -1,4 +1,4 @@
-package main
+package router
 
 import (
 	"github.com/gin-gonic/gin"
@@ -12,10 +12,12 @@ type ViewsBehavior interface {
 	Retrieve(ctx *gin.Context)
 	List(ctx *gin.Context)
 	Create(ctx *gin.Context)
-	ExtraURI(fullPath string, ctx *gin.Context)
+	ExtendsAction() map[string]gin.HandlerFunc
 }
+
 type RouterController struct {
 	Views ViewsBehavior
+	ctx   *gin.Context
 }
 
 func (router *RouterController) PostAndListMathEq(cm string, queryMath bool, ctx *gin.Context) bool {
@@ -154,7 +156,7 @@ func (router *RouterController) RouterUpdateVerify(method string, ctx *gin.Conte
 }
 
 func (router *RouterController) Dispath(ctx *gin.Context) {
-
+	router.ctx = ctx
 	switch {
 	case router.RouterPostVerify(ctx.Request.Method, ctx):
 		router.Views.Create(ctx)
@@ -166,11 +168,35 @@ func (router *RouterController) Dispath(ctx *gin.Context) {
 		} else if router.RouterRetrieveVerify(http.MethodGet, ctx) {
 			router.Views.Retrieve(ctx)
 		} else {
-			router.Views.ExtraURI(router.URISplit(ctx)[0], ctx)
+			router.Transition(ctx)
 		}
 	case router.RouterUpdateVerify(http.MethodPut, ctx):
 		router.Views.Update(ctx)
 	default:
-		router.Views.ExtraURI(router.URISplit(ctx)[0], ctx)
+		router.Transition(ctx)
 	}
 }
+
+func (router *RouterController) Transition(ctx *gin.Context) {
+
+	sets := router.Views.ExtendsAction()
+	relatively := router.URISplit(router.ctx)[0]
+	sg := false
+
+	for path, f := range sets {
+		if router.ctx.Request.RequestURI == relatively+path {
+			f(router.ctx)
+			sg = true
+		}
+	}
+
+	if !sg {
+		ctx.JSON(404, "url not found")
+	}
+}
+
+func (router *RouterController) Register(v ViewsBehavior) func(ctx *gin.Context) {
+	router.Views = v
+	return router.Dispath
+}
+
